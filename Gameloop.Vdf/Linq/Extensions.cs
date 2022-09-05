@@ -36,7 +36,7 @@ namespace Gameloop.Vdf.Linq
             }
             else
             {
-                VValue value = token as VValue;
+                VValue? value = token as VValue;
                 if (value == null)
                     throw new InvalidCastException($"Cannot cast {token.GetType()} to {typeof(T)}.");
 
