@@ -21,7 +21,7 @@ namespace Tests
                 ""root""
                 {
                     // Comment type B (as a child to an object)
-                    key1 ""value1""
+                    ""key1"" ""value1""
                     ""key2"" // Comment type C (to the right of a property name)
                     {
                         ""key3"" ""value3"" // Comment type D (to the right of a property value)
@@ -29,7 +29,7 @@ namespace Tests
                 }
                 // Comment type E (at the end of the file)
             ";
-            VProperty result = VdfConvert.Deserialize(vdf);
+            VProperty result = VdfConvert.Deserialize(vdf, new() { UsesComments = true });
 
             VProperty expected = new VProperty("root", new VObject
             {

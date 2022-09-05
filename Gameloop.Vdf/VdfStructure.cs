@@ -1,7 +1,10 @@
-﻿namespace Gameloop.Vdf
+﻿using System.Collections.Generic;
+
+namespace Gameloop.Vdf
 {
     public static class VdfStructure
     {
+
         // Format
         public const char Quote = '"', Escape = '\\', Comment = '/', Assign = ' ', Indent = '\t';
         public const char ConditionalStart = '[', ConditionalEnd = ']';
@@ -10,6 +13,8 @@
         // Conditionals
         public const string ConditionalXbox360 = "$X360", ConditionalWin32 = "$WIN32";
         public const string ConditionalWindows = "$WINDOWS", ConditionalOSX = "$OSX", ConditionalLinux = "$LINUX", ConditionalPosix = "$POSIX";
+
+        private static readonly Dictionary<string, int> ConditionalsMap = new();
 
         // Escapes
         private const uint EscapeMapLength = 128;
@@ -47,10 +52,25 @@
                 EscapeMap[unescaped] = escaped;
                 UnescapeMap[escaped] = unescaped;
             }
+
+            ConditionalsMap[ConditionalXbox360] = 0;
+            ConditionalsMap[ConditionalWin32] = 1;
+            ConditionalsMap[ConditionalWindows] = 2;
+            ConditionalsMap[ConditionalOSX] = 3;
+            ConditionalsMap[ConditionalLinux] = 4;
+            ConditionalsMap[ConditionalPosix] = 5;
         }
 
         public static bool IsEscapable(char ch) => (ch < EscapeMapLength && EscapeExistsMap[ch]);
         public static char GetEscape(char ch) => (ch < EscapeMapLength) ? EscapeMap[ch] : ch;
         public static char GetUnescape(char ch) => (ch < EscapeMapLength) ? UnescapeMap[ch] : ch;
+
+        internal static bool PassConditional(bool[] bols, string str)
+        {
+            if (!ConditionalsMap.TryGetValue(str, out var cond))
+                return false;
+
+            return bols[cond];
+        }
     }
 }

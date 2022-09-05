@@ -6,7 +6,7 @@ namespace Gameloop.Vdf
     {
         public VdfSerializerSettings Settings { get; }
         public bool CloseInput { get; set; }
-        public string? Value { get; set; }
+        public object? Value { get; set; }
 
         public State CurrentState { get; protected set; }
 

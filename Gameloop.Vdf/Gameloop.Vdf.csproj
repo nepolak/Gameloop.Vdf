@@ -2,15 +2,15 @@
 
   <PropertyGroup>
     <TargetFrameworks>net6.0</TargetFrameworks>
-    <LangVersion>8.0</LangVersion>
+    <LangVersion>10.0</LangVersion>
     <Nullable>enable</Nullable>
-    <Description>A fork of high-performance framework for the Valve Data Format, also called KeyValues.</Description>
-    <Copyright>Copyright © Shravan Rajinikanth 2016</Copyright>
+    <Description>A fork of high-performance framework for the Valve Data Format, also called KeyValues originally made by Shravan Rajinikanth (Gameloop)</Description>
+    <Copyright>nepolak</Copyright>
     <Company>Gameloop</Company>
     <Authors>Shravan Rajinikanth</Authors>
-    <Version>0.6.2</Version>
-    <AssemblyVersion>0.6.2.0</AssemblyVersion>
-    <FileVersion>0.6.2.0</FileVersion>
+    <Version>0.7.0</Version>
+    <AssemblyVersion>0.7.0.0</AssemblyVersion>
+    <FileVersion>0.7.0.0</FileVersion>
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <Title>Vdf.NET</Title>
     <PackageId>Gameloop.Vdf</PackageId>
@@ -19,8 +19,11 @@
     <NeutralLanguage>en-US</NeutralLanguage>
     <PackageProjectUrl>https://github.com/nepolak/Gameloop.Vdf</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
-    <PackageReleaseNotes>- Updated MaximumTokenSize to be adjustable in settings.
-- Project fork with public CurrentState</PackageReleaseNotes>
+    <PackageReleaseNotes>- Copied few functions from VdfSerializer to VdfReader extensions for easier sequential parsing
+- Made CurrentState public for reason above ^
+- Switched to .NET 6.0 &amp; C#10 for modern features.
+- Changed token buffer of VdfTextReader</PackageReleaseNotes>
+    <IsPublishable>True</IsPublishable>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">

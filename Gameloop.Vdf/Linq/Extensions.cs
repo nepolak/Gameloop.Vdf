@@ -31,8 +31,8 @@ namespace Gameloop.Vdf.Linq
                 // don't want to cast JValue to its interfaces, want to get the internal value
                 && typeof(U) != typeof(IComparable) && typeof(U) != typeof(IFormattable))
             {
-                // HACK
-                return (U) (object) token;
+                // HACK (!)
+                return (U)(object)token;
             }
             else
             {
@@ -80,6 +80,51 @@ namespace Gameloop.Vdf.Linq
             }
 
             return false;
+        }
+
+        public static VProperty ReadProperty(this VdfReader reader)
+        {
+            if (reader.Value is null || reader.CurrentState != VdfReader.State.Property)
+                throw new VdfException("Property key is not present.");
+
+            string? key = reader.Value as string;
+            if (key is null)
+                throw new VdfException("Property key is invalid.");
+
+            if (!reader.ReadToken())
+                throw new VdfException("Incomplete VDF data.");
+
+            // For now, we discard these comments.
+            while (reader.CurrentState == VdfReader.State.Comment)
+                if (!reader.ReadToken())
+                    throw new VdfException("Incomplete VDF data.");
+
+
+            if (reader.CurrentState == VdfReader.State.Property)
+                return new(key, new VValue(reader.Value));
+
+            return new(key, ReadObject(reader));
+        }
+
+        public static VObject ReadObject(this VdfReader reader)
+        {
+            VObject result = new VObject();
+
+            if (!reader.ReadToken())
+                throw new VdfException("Incomplete VDF data.");
+
+            while (!(reader.CurrentState == VdfReader.State.Object && reader.Value as string == VdfStructure.ObjectEnd.ToString()))
+            {
+                if (reader.CurrentState == VdfReader.State.Comment)
+                    result.Add(VValue.CreateComment(reader.Value as string ?? throw new VdfException("Invalid comment")));
+                else
+                    result.Add(ReadProperty(reader));
+
+                if (!reader.ReadToken())
+                    throw new VdfException("Incomplete VDF data.");
+            }
+
+            return result;
         }
     }
 }

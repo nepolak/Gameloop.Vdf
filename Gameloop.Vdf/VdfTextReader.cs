@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Text;
 
 namespace Gameloop.Vdf
 {
@@ -8,9 +9,11 @@ namespace Gameloop.Vdf
         private const int DefaultBufferSize = 1024;
 
         private readonly TextReader _reader;
-        private readonly char[] _charBuffer, _tokenBuffer;
-        private int _charPos, _charsLen, _tokenSize;
-        private bool _isQuoted, _isComment;
+        private readonly char[] _charBuffer;
+
+        private readonly StringBuilder _tokenBuffer;
+
+        private int _charPos, _charsLen;
 
         public VdfTextReader(TextReader reader) : this(reader, VdfSerializerSettings.Default) { }
 
@@ -21,114 +24,166 @@ namespace Gameloop.Vdf
 
             _reader = reader;
             _charBuffer = new char[DefaultBufferSize];
-            _tokenBuffer = new char[settings.MaximumTokenSize];
+
+            _tokenBuffer = new StringBuilder();
+            _tokenBuffer.EnsureCapacity(Settings.PreferableTokenSize);
+
             _charPos = _charsLen = 0;
-            _tokenSize = 0;
-            _isQuoted = false;
-            _isComment = false;
+        }
+
+
+        private string ReadString()
+        {
+            _tokenBuffer.Clear();
+
+            char curChar;
+
+            while (EnsureBuffer())
+            {
+                curChar = _charBuffer[_charPos++];
+
+                if(curChar == VdfStructure.Escape && Settings.UsesEscapeSequences)
+                {
+                    if (!EnsureBuffer())
+                        throw new VdfException("Unexpected EOF.");
+
+                    curChar = VdfStructure.GetUnescape(_charBuffer[_charPos++]);
+
+                    _tokenBuffer.Append(curChar);
+
+                    continue;
+                }
+
+                if(curChar == VdfStructure.Quote)
+                {
+                    break;
+                }
+
+                _tokenBuffer.Append(curChar);
+            }
+
+            return _tokenBuffer.ToString();
+        }
+
+        private string ReadComment(bool fetch)
+        {
+            _tokenBuffer.Clear();
+
+            char curChar;
+
+            while (EnsureBuffer())
+            {
+                curChar = _charBuffer[_charPos++];
+
+                if (curChar == '\n')
+                    break;
+
+                if (curChar == '\r' && EnsureBuffer() && _charBuffer[_charPos] == '\n')
+                    break;
+
+                if(fetch)
+                    _tokenBuffer.Append(curChar);
+            }
+
+            if(fetch)
+                return _tokenBuffer.ToString();
+
+            return null!;
+        }
+
+        private bool ReadConditional(bool fetch)
+        {
+            _tokenBuffer.Clear();
+
+            char curChar;
+
+            while (EnsureBuffer())
+            {
+                curChar = _charBuffer[_charPos++];
+
+                if (curChar == VdfStructure.ConditionalEnd)
+                    break;
+
+                if (fetch)
+                    _tokenBuffer.Append(curChar);
+            }
+
+            if (fetch)
+                return VdfStructure.PassConditional(Settings.ConditionalsArray, _tokenBuffer.ToString());
+
+            return false;
         }
 
         /// <summary>
-        /// Reads a single token. The value is stored in the 'Value' property.
+        /// Reads a single token. Value is written into Value object. Conditionals are written as Boolean object, other are as String.
         /// </summary>
-        /// <returns>True if a token was read, false otherwise.</returns>
+        /// <returns></returns>
+        /// <exception cref="VdfException"></exception>
         public override bool ReadToken()
         {
             if (!SeekToken())
                 return false;
 
-            _tokenSize = 0;
+            if (!EnsureBuffer())
+                return false;
 
-            while (EnsureBuffer())
+            var curChar = _charBuffer[_charPos++];
+
+            switch(curChar)
             {
-                char curChar = _charBuffer[_charPos];
+                case VdfStructure.Quote:
+                    Value = ReadString();
 
-                #region Comment
-
-                if (_isComment)
-                {
-                    if (curChar == '\r' || curChar == '\n')
-                    {
-                        _isComment = false;
-                        Value = new string(_tokenBuffer, 0, _tokenSize);
-                        CurrentState = State.Comment;
-                        return true;
-                    }
-                    else
-                    {
-                        _tokenBuffer[_tokenSize++] = curChar;
-                        _charPos++;
-                        continue;
-                    }
-                }
-                else if (!_isQuoted && _tokenSize == 0 && curChar == VdfStructure.Comment && _charBuffer[_charPos + 1] == VdfStructure.Comment)
-                {
-                    _isComment = true;
-                    _charPos += 2;
-                    continue;
-                }
-
-                #endregion
-
-                #region Escape
-
-                if (curChar == VdfStructure.Escape)
-                {
-                    _tokenBuffer[_tokenSize++] = (!Settings.UsesEscapeSequences ? curChar : VdfStructure.GetUnescape(_charBuffer[++_charPos]));
-                    _charPos++;
-                    continue;
-                }
-
-                #endregion
-
-                #region Quote
-
-                if (curChar == VdfStructure.Quote || (!_isQuoted && Char.IsWhiteSpace(curChar)))
-                {
-                    Value = new string(_tokenBuffer, 0, _tokenSize);
                     CurrentState = State.Property;
-                    _charPos++;
-                    return true;
-                }
+                    break;
 
-                #endregion
+                case VdfStructure.ObjectEnd:
+                case VdfStructure.ObjectStart:
 
-                #region Object start/end
+                    CurrentState = State.Object;
 
-                if (curChar == VdfStructure.ObjectStart || curChar == VdfStructure.ObjectEnd)
-                {
-                    if (_isQuoted)
+                    Value = curChar.ToString();
+
+                    break;
+
+                case VdfStructure.Comment:
+
+                    if (!EnsureBuffer() || (_charBuffer[_charPos++] != VdfStructure.Comment))
+                        throw new VdfException("Wrong comment!");
+
+                    if (!Settings.UsesComments)
                     {
-                        _tokenBuffer[_tokenSize++] = curChar;
-                        _charPos++;
-                        continue;
+                        ReadComment(false);
+
+                        return ReadToken();
                     }
-                    else if (_tokenSize != 0)
+
+                    Value = ReadComment(true);
+
+                    CurrentState = State.Comment;
+                    
+                    break;
+
+                case VdfStructure.ConditionalStart:
+
+                    if(!Settings.UsesConditionals)
                     {
-                        Value = new string(_tokenBuffer, 0, _tokenSize);
-                        CurrentState = State.Property;
-                        return true;
+                        ReadConditional(false);
+
+                        return ReadToken();
                     }
-                    else
-                    {
-                        Value = curChar.ToString();
-                        CurrentState = State.Object;
-                        _charPos++;
-                        return true;
-                    }
-                }
 
-                #endregion
+                    Value = ReadConditional(true);
 
-                #region Long token
+                    CurrentState = State.Conditional;
 
-                _tokenBuffer[_tokenSize++] = curChar;
-                _charPos++;
+                    break;
 
-                #endregion
+                default:
+                    throw new VdfException("Unexpected token!");
             }
 
-            return false;
+            return true;
         }
 
         /// <summary>
@@ -143,18 +198,10 @@ namespace Gameloop.Vdf
                 if (Char.IsWhiteSpace(_charBuffer[_charPos]))
                 {
                     _charPos++;
+
                     continue;
                 }
 
-                // Token
-                if (_charBuffer[_charPos] == VdfStructure.Quote)
-                {
-                    _isQuoted = true;
-                    _charPos++;
-                    return true;
-                }
-
-                _isQuoted = false;
                 return true;
             }
             
@@ -180,7 +227,7 @@ namespace Gameloop.Vdf
                 return true;
 
             int remainingChars = _charsLen - _charPos;
-            _charBuffer[0] = _charBuffer[(_charsLen - 1) * remainingChars]; // A bit of mathgic to improve performance by avoiding a conditional.
+            _charBuffer[0] = _charBuffer[(_charsLen - 1) * remainingChars]; // A bit of mathgic to improve performance by avoiding a conditional. // epic
             _charsLen = _reader.Read(_charBuffer, remainingChars, DefaultBufferSize - remainingChars) + remainingChars;
             _charPos = 0;
 
@@ -190,6 +237,7 @@ namespace Gameloop.Vdf
         public override void Close()
         {
             base.Close();
+
             if (CloseInput)
                 _reader.Dispose();
         }
